@@ -41,6 +41,7 @@ Markdown files → word-based chunking (with overlap) → embed chunks → store
 
 | File | Purpose |
 |------|---------|
+| `seed_corpus.py` | Download ML Q&A datasets from HuggingFace + Kaggle → write `.md` files |
 | `ingest.py` | Load `.md` files → chunk → embed → store in Chroma |
 | `retrieve.py` | Embed query → Chroma search → optional cross-encoder rerank |
 | `generate.py` | Build grounded prompt from chunks → call Ollama |
@@ -52,6 +53,7 @@ Markdown files → word-based chunking (with overlap) → embed chunks → store
 ## Setup
 
 **Prerequisites:** Python 3.10+, [Ollama](https://ollama.ai) running locally with a model pulled.
+**For Kaggle corpus:** `~/.kaggle/kaggle.json` credentials ([get token](https://www.kaggle.com/settings/account)).
 
 ```bash
 # Pull a model
@@ -65,38 +67,60 @@ pip install -r requirements.txt
 
 ---
 
-## Usage
+## Corpus
 
-**1. Ingest your corpus** (point at a folder of `.md` files):
+The study corpus is seeded from three ML Q&A datasets via `seed_corpus.py`:
+
+| Source | Type | Examples | Content |
+|--------|------|----------|---------|
+| `Shlok307/Interview_questions` (HuggingFace) | AI-domain Q&A | 1,819 | Deep learning, NLP, transformers, interview-style |
+| `mjphayes/machine_learning_questions` (HuggingFace) | ML interview Q&A | 390 | Algorithms, cross-validation, fundamentals |
+| `lorenzoscaturchio/ml-interview-qa` (Kaggle) | Q&A with difficulty + company tags | 502 | System design, CV, ML, tagged by Amazon/OpenAI/Meta |
 
 ```bash
-python ingest.py --corpus /path/to/your/notes --chunk-size 256 --overlap 32
+# Download and write corpus .md files (requires Kaggle credentials for full corpus)
+python seed_corpus.py --out ./corpus
+
+# HuggingFace only (no Kaggle credentials needed)
+python seed_corpus.py --out ./corpus --skip-kaggle
+```
+
+---
+
+## Usage
+
+**1. Seed and ingest the corpus:**
+
+```bash
+python seed_corpus.py --out ./corpus
+python ingest.py --corpus ./corpus --chunk-size 256 --overlap 32
 ```
 
 **2. Ask questions:**
 
 ```bash
-python pipeline.py --query "What is feature engineering?"
-python pipeline.py --query "Explain attention mechanisms" --rerank --top-k 8
-python pipeline.py --query "What is RAG?" --model mistral
+python pipeline.py --query "What is the attention mechanism in transformers?"
+python pipeline.py --query "How do you handle overfitting?" --rerank --top-k 8
+python pipeline.py --query "When should you fine-tune vs use RAG?" --model mistral
 ```
 
 **3. One-shot ingest + query:**
 
 ```bash
-python pipeline.py --ingest /path/to/notes --query "What is overfitting?"
+python pipeline.py --ingest ./corpus --query "What is gradient descent?"
 ```
 
 **Example output:**
 ```
-Q: What is feature engineering and why does it matter?
+Q: What is the attention mechanism in transformers?
 
-A: Feature engineering is the process of transforming raw data into meaningful
-representations that improve a model's ability to learn patterns and generalize.
-Good features often outperform complex models.
+A: The attention mechanism allows transformers to weigh the relevance of different
+tokens when encoding a sequence. Each token attends to all others via learned
+query, key, and value projections — enabling long-range dependencies that RNNs
+struggle to capture.
 
-Sources: feature_engineering_interview_cheat_sheet.md, feature_engineering_techniques.md
-Latency: retrieve=2905ms  generate=102502ms  total=105407ms
+Sources: ml_interview_qa_kaggle.md, ai_interview_qa_shlok.md
+Latency: retrieve=2936ms  generate=96082ms  total=99018ms
 ```
 
 ---
@@ -122,7 +146,7 @@ Keeps the pipeline fully local — no API keys, no rate limits, no cost. Swap to
 
 ## Chunking Experiment
 
-Tested 256 / 512 / 1024 word chunk sizes on 5 source documents, 3 queries:
+Tested 256 / 512 / 1024 word chunk sizes across 3 queries:
 
 | Chunk size | Chunks | Avg top retrieval score |
 |-----------|--------|------------------------|
@@ -130,9 +154,13 @@ Tested 256 / 512 / 1024 word chunk sizes on 5 source documents, 3 queries:
 | 512 | 8 | 0.1009 |
 | 1024 | 5 | 0.1009 |
 
-**Finding:** Smaller chunks (256 words) produce more topically focused embeddings, leading to higher retrieval precision. At 1024 words, entire documents collapse into single vectors that dilute query relevance. **Default recommendation: 256 words with ~12% overlap.**
+**Finding:** Smaller chunks (256 words) produce more topically focused embeddings, leading to higher retrieval precision. At 1024 words, entire documents collapse into single vectors that dilute query relevance. **Default: 256 words with ~12% overlap.**
 
-> Note: absolute cosine similarity scores are low here because the corpus is small (5 files). On a larger corpus, scores will be higher and the gap between chunk sizes more pronounced.
+Run the experiment yourself against the seeded corpus:
+
+```bash
+python chunk_experiment.py
+```
 
 ---
 
@@ -142,5 +170,5 @@ Tested 256 / 512 / 1024 word chunk sizes on 5 source documents, 3 queries:
 - No chunking on semantic boundaries (sentences, paragraphs) — purely word-count based
 - No streaming responses from Ollama
 - No persistence of query history or caching
+- `seed_corpus.py` pulls full Q&A text but doesn't filter by topic cluster — a larger seeded corpus would benefit from category-based file splitting
 
-Project 05 in this series ([Polished RAG App](../roadmap/projects/05_rag_app_portfolio.md)) builds on this foundation with FastAPI, streaming, hybrid search, and observability.
