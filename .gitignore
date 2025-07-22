@@ -1,6 +1,7 @@
 chroma_db/
-chroma_db_exp_*/
+chroma_db_*/
 chunk_experiment_results.json
+corpus/
 __pycache__/
 *.pyc
 .venv/
