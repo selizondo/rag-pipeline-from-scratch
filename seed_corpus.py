@@ -79,10 +79,9 @@ _ML_KEYWORDS = {
 def fetch_mjphayes() -> list[dict]:
     from datasets import load_dataset
     print("Downloading mjphayes/machine_learning_questions...")
-    train = load_dataset("mjphayes/machine_learning_questions", split="train")
-    test = load_dataset("mjphayes/machine_learning_questions", split="test")
+    ds = load_dataset("mjphayes/machine_learning_questions", split="train+test")
     rows = []
-    for row in list(train) + list(test):
+    for row in ds:
         q = (row.get("question") or "").strip()
         a = (row.get("answer") or "").strip()
         if not q or len(a) < 40:
@@ -132,7 +131,7 @@ def fetch_kaggle() -> list[dict]:
 
     tmpdir = tempfile.mkdtemp()
     try:
-        api.dataset_download_files(KAGGLE_DATASET, path=tmpdir, unzip=True, quiet=True)  # noqa
+        api.dataset_download_files(KAGGLE_DATASET, path=tmpdir, unzip=True, quiet=True)
         csv_path = os.path.join(tmpdir, KAGGLE_CSV)
         if not os.path.exists(csv_path):
             # Find any CSV in the download
