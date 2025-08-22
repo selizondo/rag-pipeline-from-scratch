@@ -50,20 +50,35 @@ Markdown files → word-based chunking (with overlap) → embed chunks → store
 
 ---
 
-## Setup
+## Quick Start
 
-**Prerequisites:** Python 3.10+, [Ollama](https://ollama.ai) running locally with a model pulled.
-**For Kaggle corpus:** `~/.kaggle/kaggle.json` credentials ([get token](https://www.kaggle.com/settings/account)).
+**Runs fully locally — no GPU, no API key required.**
 
 ```bash
-# Pull a model
-ollama pull llama3.2
+# 1. One-time: copy and fill the workspace master env
+cp ../career/.env.example ../career/.env   # add keys if needed (not required for this project)
 
-# Create venv and install deps
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+# 2. Activate shared venv
+source ~/.venvs/newline/bin/activate
+# or create a project venv:
+#   python -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt
+
+# 3. Pull an Ollama model (if not already pulled)
+ollama pull llama3.2   # or: qwen2.5-coder:7b, mistral
+
+# 4. Seed + ingest corpus (one-time, ~2 min)
+python seed_corpus.py --out ./corpus        # HuggingFace sources only
+# python seed_corpus.py --out ./corpus --skip-kaggle  # skip if no Kaggle credentials
+
+python ingest.py --corpus ./corpus --chunk-size 256 --overlap 32
+
+# 5. Query
+python pipeline.py --query "What is the attention mechanism in transformers?"
+python pipeline.py --query "How do you prevent overfitting?" --rerank --top-k 8
 ```
+
+**Prerequisites:** Python 3.10+, [Ollama](https://ollama.com) running locally.
+**For Kaggle corpus:** `~/.kaggle/kaggle.json` credentials ([get token](https://www.kaggle.com/settings/account)).
 
 ---
 
