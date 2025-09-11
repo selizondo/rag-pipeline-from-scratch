@@ -171,11 +171,23 @@ Tested 256 / 512 / 1024 word chunk sizes across 3 queries:
 
 **Finding:** Smaller chunks (256 words) produce more topically focused embeddings, leading to higher retrieval precision. At 1024 words, entire documents collapse into single vectors that dilute query relevance. **Default: 256 words with ~12% overlap.**
 
+**Answer quality:** Evaluated on 20 held-out questions using the [llm-eval-harness](../llm-eval-harness) judge — 72% Accuracy@4 with chunk=256, vector search only. This is the baseline that `rag-pipeline-app` improves on: adding hybrid BM25+vector search raises it to 83% (see [rag-pipeline-app Decision 1](../rag-pipeline-app/README.md#decision-1-hybrid-bm25--vector-search)).
+
 Run the experiment yourself against the seeded corpus:
 
 ```bash
 python chunk_experiment.py
 ```
+
+---
+
+## Where This Breaks
+
+**At 100k documents:** The embedding step in `ingest.py` is synchronous — all chunks embedded in a single loop. At ~20k chunks (256 words each from a 100k-doc corpus), ingest takes 45–60 minutes. Fix: batch with `asyncio` or use a dedicated embedding service.
+
+**Chroma file-backed storage:** The default Chroma setup writes to a local directory. It has no concurrency guarantees — two simultaneous writes corrupt the index. For multi-user or multi-process access, switch to Chroma's HTTP server mode.
+
+**No observability:** There's no record of which chunks were retrieved for any given query or how long retrieval took. You can't tell whether a wrong answer is a retrieval failure or a generation failure. `rag-pipeline-app` adds SQLite logging for this — see [its observability section](../rag-pipeline-app/README.md#decision-3-observability-from-day-one).
 
 ---
 
