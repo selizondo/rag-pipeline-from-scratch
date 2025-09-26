@@ -15,8 +15,13 @@ MAX_CONTEXT_WORDS = 1500  # stay well within Ollama context window
 
 
 def build_prompt(query: str, chunks: list[dict]) -> str:
-    """Construct a grounded prompt from retrieved chunks."""
-    # Trim context to avoid exceeding context window
+    """Construct a grounded prompt from retrieved chunks.
+
+    The prompt includes the retrieved context and a strict instruction to answer
+    only from the provided context. This helps reduce hallucinations by making
+    the model rely on retrieved text instead of generating unsupported facts.
+    """
+    # Trim context to avoid exceeding the model's context window.
     context_parts = []
     word_count = 0
     for chunk in chunks:
@@ -40,14 +45,18 @@ Answer:"""
 
 
 def generate(query: str, chunks: list[dict], model: str = DEFAULT_MODEL) -> str:
-    """Send prompt to Ollama and return the response."""
+    """Send the assembled prompt to Ollama and return the assistant's answer."""
     prompt = build_prompt(query, chunks)
+
+    # This request is synchronous and may take up to the timeout if the model is slow.
     response = requests.post(
         OLLAMA_URL,
         json={"model": model, "prompt": prompt, "stream": False},
         timeout=120,
     )
     response.raise_for_status()
+
+    # Ollama returns a JSON payload with a 'response' field.
     return response.json()["response"].strip()
 
 

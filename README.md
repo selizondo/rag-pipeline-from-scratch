@@ -50,6 +50,11 @@ Markdown files → word-based chunking (with overlap) → embed chunks → store
 
 ---
 
+## Limitations
+This repo is intentionally minimal and is not meant to be production-ready. It lacks an API boundary, query audit logging, and explicit fallback behavior, so it is best used as a research-quality baseline rather than a deployable service.
+
+---
+
 ## Quick Start
 
 **Runs fully locally — no GPU, no API key required.**

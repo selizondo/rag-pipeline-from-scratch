@@ -26,11 +26,17 @@ def run(
     db_path: str = "./chroma_db",
 ) -> dict:
     """Run the full RAG pipeline and return result with timing metadata."""
+    query = query.strip()
+    if not query:
+        raise ValueError("Query cannot be empty")
+
     t0 = time.time()
 
+    # Retrieve relevant chunks first, optionally applying reranking.
     chunks = retrieve(query, top_k=top_k, db_path=db_path, rerank=rerank)
     t_retrieve = time.time()
 
+    # Generate the answer from the retrieved context.
     answer = generate(query, chunks, model=model)
     t_generate = time.time()
 

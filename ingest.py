@@ -7,7 +7,6 @@ Usage:
 
 import argparse
 import os
-import re
 
 import chromadb
 from sentence_transformers import SentenceTransformer
@@ -33,8 +32,12 @@ def load_markdown_files(corpus_dir: str) -> list[dict]:
 
 def chunk_text(text: str, chunk_size: int, overlap: int) -> list[str]:
     """
-    Split text into overlapping chunks by word count.
-    Word-based splitting preserves sentence boundaries better than character-based.
+    Split a document into overlapping chunks by word count.
+
+    This is a simple way to create context windows for retrieval.
+    We use words rather than characters so the chunks are less likely
+    to break in the middle of a sentence, and we add overlap so that
+    important context is preserved between adjacent chunks.
     """
     words = text.split()
     chunks = []
@@ -48,12 +51,15 @@ def chunk_text(text: str, chunk_size: int, overlap: int) -> list[str]:
 
 
 def ingest(corpus_dir: str, chunk_size: int, overlap: int, db_path: str) -> int:
+    """Ingest a markdown corpus into a persistent Chroma collection."""
     docs = load_markdown_files(corpus_dir)
 
+    # Load the sentence-transformers model that converts text to vectors.
     model = SentenceTransformer(EMBED_MODEL)
     client = chromadb.PersistentClient(path=db_path)
 
-    # Drop and recreate collection for clean re-ingestion
+    # Delete and recreate the collection so the ingestion is clean every time.
+    # This avoids duplicated chunks when rerunning on the same corpus.
     try:
         client.delete_collection(COLLECTION_NAME)
     except Exception:
@@ -64,6 +70,9 @@ def ingest(corpus_dir: str, chunk_size: int, overlap: int, db_path: str) -> int:
     for doc in docs:
         chunks = chunk_text(doc["text"], chunk_size, overlap)
         embeddings = model.encode(chunks, show_progress_bar=False).tolist()
+
+        # Use stable IDs and metadata so we can track which source file and
+        # chunk index each vector belongs to after retrieval.
         ids = [f"{doc['source']}_{i}" for i in range(len(chunks))]
         metadatas = [{"source": doc["source"], "chunk_index": i} for i in range(len(chunks))]
 
