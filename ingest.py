@@ -8,11 +8,19 @@ Architecture overview:
 
     Flow: .md files → word-based chunking → sentence-transformer embeddings → Chroma
 
+Version-scoped filtering:
+    Every chunk is stored with a `corpus_version` metadata field (from
+    config.yaml → corpus.version). Retrieve.py filters `WHERE corpus_version = "v1"`
+    before ANN search, so bumping the version and re-ingesting doesn't mix old
+    and new chunks — callers can roll back by querying an older version without
+    full re-ingest. See docs/tradeoffs.md for details.
+
 Usage:
     python ingest.py --corpus /path/to/study_notes/aiml --chunk-size 512 --overlap 64
 """
 
 import argparse
+import logging
 import os
 
 import chromadb
@@ -22,7 +30,17 @@ from sentence_transformers import SentenceTransformer
 # WHY import instead of define locally: if ingest and retrieve use different
 # embedding models, vectors are incompatible and retrieval silently returns wrong
 # results. Sharing a constant from config.py makes that invariant enforced.
-from config import COLLECTION_NAME, DEFAULT_CHUNK_SIZE, DEFAULT_DB_PATH, DEFAULT_OVERLAP, EMBED_MODEL
+from config import (
+    COLLECTION_NAME,
+    CORPUS_VERSION,
+    DEFAULT_CHUNK_SIZE,
+    DEFAULT_DB_PATH,
+    DEFAULT_OVERLAP,
+    EMBED_MODEL,
+)
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 
 
 def load_markdown_files(corpus_dir: str) -> list[dict]:
@@ -36,7 +54,7 @@ def load_markdown_files(corpus_dir: str) -> list[dict]:
             text = f.read().strip()
         if text:
             docs.append({"source": fname, "text": text})
-    print(f"Loaded {len(docs)} files from {corpus_dir}")
+    logger.info("Loaded %d files from %s", len(docs), corpus_dir)
     return docs
 
 
@@ -80,6 +98,9 @@ def ingest(corpus_dir: str, chunk_size: int, overlap: int, db_path: str) -> int:
     """
     Ingest a markdown corpus into a persistent Chroma collection.
 
+    Every chunk is tagged with corpus_version from config.yaml so retrieve.py
+    can filter to a specific corpus version without mixing old and new chunks.
+
     WHY delete-then-recreate instead of upsert:
         On a re-ingest (changed corpus or changed chunk_size), upsert would mix
         old and new chunks in the same collection. Chunks that no longer exist in
@@ -106,20 +127,36 @@ def ingest(corpus_dir: str, chunk_size: int, overlap: int, db_path: str) -> int:
     for doc in docs:
         chunks = chunk_text(doc["text"], chunk_size, overlap)
 
-        # batch-encode all chunks for this document at once — sentence-transformers
+        # Batch-encode all chunks for this document at once — sentence-transformers
         # is significantly faster encoding in batches than one chunk at a time.
         embeddings = model.encode(chunks, show_progress_bar=False).tolist()
 
         # Use stable IDs so the same chunk always maps to the same vector row.
         # Format: "{filename}_{chunk_index}" — unique within the collection.
         ids = [f"{doc['source']}_{i}" for i in range(len(chunks))]
-        metadatas = [{"source": doc["source"], "chunk_index": i} for i in range(len(chunks))]
+
+        # corpus_version enables version-scoped ANN filtering in retrieve.py.
+        # WHY store it per-chunk: Chroma metadata filters are applied before ANN
+        # search, so filtering WHERE corpus_version = "v1" scopes the search to
+        # the current corpus without re-ingesting. Bump CORPUS_VERSION in
+        # config.yaml when the corpus changes to isolate old and new chunks.
+        metadatas = [
+            {
+                "source": doc["source"],
+                "chunk_index": i,
+                "corpus_version": CORPUS_VERSION,
+            }
+            for i in range(len(chunks))
+        ]
 
         collection.add(documents=chunks, embeddings=embeddings, ids=ids, metadatas=metadatas)
         total_chunks += len(chunks)
-        print(f"  {doc['source']}: {len(chunks)} chunks")
+        logger.info("  %s: %d chunks (corpus_version=%s)", doc["source"], len(chunks), CORPUS_VERSION)
 
-    print(f"\nIngested {total_chunks} chunks from {len(docs)} files into {db_path}")
+    logger.info(
+        "Ingested %d chunks from %d files into %s (corpus_version=%s)",
+        total_chunks, len(docs), db_path, CORPUS_VERSION,
+    )
     return total_chunks
 
 

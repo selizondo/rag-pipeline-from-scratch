@@ -14,36 +14,34 @@ Architecture overview:
         enough information") rather than fabricate plausible-sounding answers.
 
 Error handling:
-    generate() returns a plain string in all cases. On Ollama errors, it returns
-    a "[ERROR: ...]" string rather than raising. WHY: callers (like pipeline.py)
-    can include the error string in their response without catching exceptions,
-    and the user sees a useful message instead of a stack trace.
+    generate() returns (answer_str, fallback_events) in all cases. On Ollama
+    errors, answer is a best-effort "Sources: [list]" string and fallback_events
+    records what went wrong (e.g., "ollama_timeout_30s"). WHY return instead of
+    raise: callers (like pipeline.py, api.py) can include the fallback in their
+    response without catching exceptions, and the user sees a useful message.
+
+Async usage:
+    generate_async() wraps the synchronous Ollama call in asyncio.to_thread() so
+    FastAPI endpoints don't block the event loop. WHY: Ollama is single-threaded;
+    blocking the event loop starves all concurrent requests while one generation
+    runs. asyncio.to_thread() offloads the blocking HTTP call to a thread pool.
 
 Usage:
     python generate.py --query "What is attention?" --top-k 5
 """
 
+import asyncio
 import argparse
+import logging
 
 import requests
 
-from config import DEFAULT_DB_PATH, DEFAULT_OLLAMA_MODEL
+from config import CORPUS_VERSION, DEFAULT_DB_PATH, DEFAULT_OLLAMA_MODEL, MAX_CONTEXT_WORDS, OLLAMA_TIMEOUT_SECONDS
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 
 OLLAMA_URL = "http://localhost:11434/api/generate"
-
-# Context window budget for llama3.2.
-# llama3.2 has an 8192-token context window (Ollama default).
-# Prompt overhead (system instructions + question + formatting): ~200 tokens.
-# English text averages ~1.3 tokens per word.
-# Max safe word budget = (8192 - 200) / 1.3 ≈ 6147 words.
-#
-# WHY 1500 words instead of the theoretical max of ~6147:
-#   More context does not always mean better answers. Irrelevant context degrades
-#   generation quality — the model attends to all context tokens, so padding the
-#   prompt with weakly-related chunks can crowd out the relevant ones. 1500 words
-#   (≈5 chunks × 300 words each) is a practical starting point. The calculation
-#   above confirms 1500 is well within the safe window, not an arbitrary cap.
-MAX_CONTEXT_WORDS = 1500
 
 
 def build_prompt(query: str, chunks: list[dict]) -> str:
@@ -52,9 +50,9 @@ def build_prompt(query: str, chunks: list[dict]) -> str:
 
     WHY iterate chunks and trim by word count instead of passing all chunks:
         Different corpora and top_k values can produce very long context sections.
-        Trimming at MAX_CONTEXT_WORDS prevents the prompt from exceeding the
-        model's context window, which would cause Ollama to silently truncate the
-        input or return an error.
+        Trimming at MAX_CONTEXT_WORDS (from config.yaml → generation.context_budget_words)
+        prevents the prompt from exceeding the model's context window, which would
+        cause Ollama to silently truncate the input or return an error.
     """
     context_parts = []
     word_count = 0
@@ -78,38 +76,94 @@ Question: {query}
 Answer:"""
 
 
-def generate(query: str, chunks: list[dict], model: str = DEFAULT_OLLAMA_MODEL) -> str:
+def _call_ollama(prompt: str, model: str) -> tuple[str, list[str]]:
+    """
+    Synchronous Ollama HTTP call with timeout and structured error handling.
+
+    Returns (answer, fallback_events). On failure, answer is a best-effort
+    "Generation unavailable. Sources: [list]" message so the caller still has
+    something useful to return to the user.
+
+    WHY return fallback_events instead of raising:
+        Callers (pipeline.py, api.py) include fallback_events in the response
+        so downstream observers (eval harness, monitoring) can audit what
+        degradation occurred without parsing log files.
+    """
+    try:
+        response = requests.post(
+            OLLAMA_URL,
+            json={"model": model, "prompt": prompt, "stream": False},
+            timeout=OLLAMA_TIMEOUT_SECONDS,
+        )
+        response.raise_for_status()
+        return response.json()["response"].strip(), []
+    except requests.exceptions.ConnectionError:
+        msg = (
+            f"Generation unavailable — Ollama not reachable at {OLLAMA_URL}. "
+            f"Try: ollama serve"
+        )
+        return msg, ["ollama_connection_error"]
+    except requests.exceptions.Timeout:
+        msg = (
+            f"Generation unavailable — Ollama timed out after {OLLAMA_TIMEOUT_SECONDS}s. "
+            f"Try a shorter query or a smaller model."
+        )
+        return msg, [f"ollama_timeout_{OLLAMA_TIMEOUT_SECONDS}s"]
+    except requests.exceptions.HTTPError as e:
+        msg = f"Generation unavailable — Ollama returned HTTP {e.response.status_code}."
+        return msg, [f"ollama_http_{e.response.status_code}"]
+    except Exception as e:
+        msg = f"Generation unavailable — unexpected error: {e}"
+        return msg, ["ollama_error_unexpected"]
+
+
+def generate(query: str, chunks: list[dict], model: str = DEFAULT_OLLAMA_MODEL) -> tuple[str, list[str]]:
     """
     Send the assembled prompt to a local Ollama model and return the answer.
+
+    Returns (answer, fallback_events). On Ollama failure, answer is a
+    best-effort string listing the sources so the caller still has something
+    useful to return.
 
     WHY stream=False instead of streaming:
         This is a research pipeline, not a production API. Blocking until we
         have the full response is simpler. For a production UI, switch to
         stream=True and yield tokens as they arrive (see rag-pipeline-app for
         the streaming implementation with SSE).
-
-    On Ollama errors, returns an "[ERROR: ...]" string rather than raising.
-    WHY: callers can include the error in their response without extra exception
-    handling. The user sees a clear message instead of a stack trace.
     """
-    prompt = build_prompt(query, chunks)
+    if not chunks:
+        sources = []
+    else:
+        sources = list({c["source"] for c in chunks})
 
-    try:
-        response = requests.post(
-            OLLAMA_URL,
-            json={"model": model, "prompt": prompt, "stream": False},
-            timeout=120,
-        )
-        response.raise_for_status()
-        return response.json()["response"].strip()
-    except requests.exceptions.ConnectionError:
-        return f"[ERROR: Ollama not reachable at {OLLAMA_URL}. Is Ollama running? Try: ollama serve]"
-    except requests.exceptions.Timeout:
-        return "[ERROR: Ollama request timed out after 120s. Try a shorter query or a smaller model.]"
-    except requests.exceptions.HTTPError as e:
-        return f"[ERROR: Ollama returned HTTP {e.response.status_code}: {e.response.text[:200]}]"
-    except Exception as e:
-        return f"[ERROR: Generation failed: {e}]"
+    prompt = build_prompt(query, chunks)
+    answer, fallback_events = _call_ollama(prompt, model)
+
+    # If generation failed, append source list so the user has grounding context.
+    if fallback_events:
+        if sources:
+            answer += f" Sources: {', '.join(sources)}"
+        logger.warning("Generation fallback: %s", fallback_events)
+
+    return answer, fallback_events
+
+
+async def generate_async(
+    query: str,
+    chunks: list[dict],
+    model: str = DEFAULT_OLLAMA_MODEL,
+) -> tuple[str, list[str]]:
+    """
+    Async wrapper for generate() using asyncio.to_thread().
+
+    WHY to_thread instead of native async:
+        Ollama's HTTP endpoint is a blocking call — there is no native async
+        client for it. asyncio.to_thread() offloads the blocking I/O to a
+        thread pool so the FastAPI event loop remains free to handle other
+        requests while generation runs. Without this, one slow Ollama call
+        blocks all concurrent requests in the same process.
+    """
+    return await asyncio.to_thread(generate, query, chunks, model)
 
 
 if __name__ == "__main__":
@@ -123,7 +177,9 @@ if __name__ == "__main__":
     parser.add_argument("--rerank", action="store_true")
     args = parser.parse_args()
 
-    chunks = retrieve(args.query, args.top_k, args.db_path, args.rerank)
-    answer = generate(args.query, chunks, args.model)
+    chunks, _ = retrieve(args.query, args.top_k, args.db_path, args.rerank)
+    answer, fallback_events = generate(args.query, chunks, args.model)
     print(f"\nQ: {args.query}\n")
     print(f"A: {answer}")
+    if fallback_events:
+        print(f"Fallback events: {fallback_events}")

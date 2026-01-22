@@ -1,0 +1,72 @@
+# config.yaml — Single source of truth for all pipeline parameters.
+#
+# WHY a YAML config instead of constants inline in code:
+#   Magic numbers scattered across ingest.py, retrieve.py, and generate.py can
+#   drift — you change chunk_size in one place and forget the other. This file
+#   is the canonical definition. All scripts load from here at startup.
+#   Changing a value here changes ingest + query behavior everywhere at once.
+#
+# Reload required: after changing embedding.model or embedding.chunk_size, you
+# must re-run ingest.py to rebuild the index. The corpus_version should also be
+# bumped so version-scoped filtering doesn't mix old and new chunks.
+
+embedding:
+  # Bi-encoder for query and document embedding. Must stay in sync between
+  # ingest.py and retrieve.py — different models produce incompatible vector
+  # spaces and silently return wrong results.
+  model: "all-MiniLM-L6-v2"
+
+  # Words per chunk. At 512 words, all-MiniLM-L6-v2's 256 WordPiece token limit
+  # is sometimes exceeded — the tail of long chunks is silently truncated.
+  # Re-ingest required if you change this value.
+  chunk_size: 512
+
+  # Overlap words shared between adjacent chunks. 64/512 = 12.5%.
+  # Too little (<5%) misses boundary context; too much (>30%) bloats the index.
+  chunk_overlap: 64
+
+retrieval:
+  # Number of chunks returned to the generation stage.
+  top_k: 5
+
+  # Cross-encoder reranking model. Used in the optional second-pass rerank.
+  rerank_model: "cross-encoder/ms-marco-MiniLM-L-6-v2"
+
+  # Dense score threshold for BM25 fallback.
+  # If the top chunk's cosine similarity score is below this threshold, the
+  # retriever switches to BM25 and logs a fallback event. Tune this value if
+  # you observe BM25 triggering too often (raise) or not enough (lower).
+  bm25_fallback_threshold: 0.3
+
+  # Latency SLA: warn if retrieval takes longer than this (milliseconds).
+  # ChromaDB IndexFlatIP is O(N); at >100K chunks, latency rises above this
+  # threshold and the warning signals that HNSW indexing is needed.
+  latency_sla_ms: 500
+
+generation:
+  # Ollama model for answer generation.
+  model: "llama3.2"
+
+  # Conservative context word budget.
+  # llama3.2 has an 8192-token window; prompt overhead ~200 tokens;
+  # English averages ~1.3 tokens/word → max ~6147 words.
+  # 1500 is deliberately conservative: more context dilutes relevance signal.
+  context_budget_words: 1500
+
+  # Ollama request timeout in seconds.
+  # 30s is sufficient for short answers on a modern laptop. Increase to 120s
+  # for long-form generation or slow hardware.
+  timeout_seconds: 30
+
+corpus:
+  # Bump this when you re-ingest from a new dataset version.
+  # Version-scoped filtering uses this to separate old and new chunks in the
+  # same Chroma collection, allowing rollback without full re-ingest.
+  version: "v1"
+
+chroma:
+  # Path to the persistent Chroma database.
+  db_path: "./chroma_db"
+
+  # Collection name — must match between ingest.py and retrieve.py.
+  collection_name: "study_notes"

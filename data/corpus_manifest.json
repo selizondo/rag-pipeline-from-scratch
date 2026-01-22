@@ -1,0 +1,28 @@
+{
+  "corpus_version": "v1",
+  "generated_date": "2026-05-16",
+  "description": "AI/ML interview Q&A corpus. Bump corpus_version in config.yaml when re-downloading or filtering changes.",
+  "sources": [
+    {
+      "file": "ai_interview_qa_shlok.md",
+      "origin": "HuggingFace: Shlok307/Interview_questions (AI domain filter)",
+      "sha256": "ca0d9073fe1248a79300fabe97f197ee66bef8cae9c06866cb0a43e13e609b58",
+      "size_kb": 502,
+      "approx_qa_pairs": 1843
+    },
+    {
+      "file": "ml_interview_qa_kaggle.md",
+      "origin": "Kaggle: lorenzoscaturchio/ml-interview-qa",
+      "sha256": "a7f1f6cdbd0fbb3ffcf0f488e2f961226fdb17a14fc4660fafcc008f30e5181f",
+      "size_kb": 249,
+      "approx_qa_pairs": 502
+    },
+    {
+      "file": "ml_interview_qa_mjphayes.md",
+      "origin": "HuggingFace: mjphayes/machine_learning_questions (ML keyword filter)",
+      "sha256": "b0780b74ce579760b26e77c2c94b84d95fcd19622a2f91223d39a206bf66ee98",
+      "size_kb": 94,
+      "approx_qa_pairs": 636
+    }
+  ]
+}

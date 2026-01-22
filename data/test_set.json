@@ -1,0 +1,72 @@
+[
+  {
+    "id": "t01",
+    "question": "What is the attention mechanism in transformers?",
+    "ground_truth": "The attention mechanism allows the model to weigh the importance of different words in a sequence when encoding or decoding. Scaled dot-product attention computes scores between query and key vectors, applies softmax, then uses the result to weight the value vectors.",
+    "relevant_sources": ["ai_interview_qa_shlok.md", "ml_interview_qa_mjphayes.md"],
+    "notes": "Core transformer concept — expect high dense retrieval scores."
+  },
+  {
+    "id": "t02",
+    "question": "What is the difference between overfitting and underfitting?",
+    "ground_truth": "Overfitting occurs when a model learns the training data too well, including noise, and fails to generalize. Underfitting occurs when the model is too simple to capture the underlying pattern. Overfitting has low training error but high test error; underfitting has high error on both.",
+    "relevant_sources": ["ai_interview_qa_shlok.md", "ml_interview_qa_kaggle.md"],
+    "notes": "Classic ML concept with multiple corpus entries."
+  },
+  {
+    "id": "t03",
+    "question": "How does LoRA fine-tuning reduce the number of trainable parameters?",
+    "ground_truth": "LoRA (Low-Rank Adaptation) freezes the pre-trained model weights and injects trainable low-rank decomposition matrices into each layer. Instead of updating the full weight matrix W, it learns two smaller matrices A and B such that the update is W + BA. This reduces trainable parameters from d*k to d*r + r*k where r << min(d,k).",
+    "relevant_sources": ["ai_interview_qa_shlok.md", "ml_interview_qa_mjphayes.md"],
+    "notes": "Fine-tuning topic — tests retrieval of technical details."
+  },
+  {
+    "id": "t04",
+    "question": "What is precision and recall and when do you prefer one over the other?",
+    "ground_truth": "Precision is the fraction of retrieved items that are relevant (TP / (TP + FP)). Recall is the fraction of relevant items that were retrieved (TP / (TP + FN)). Prefer high precision when false positives are costly (e.g., spam detection shown to users). Prefer high recall when false negatives are costly (e.g., cancer screening).",
+    "relevant_sources": ["ai_interview_qa_shlok.md", "ml_interview_qa_kaggle.md"],
+    "notes": "Classification metrics — well-covered in corpus."
+  },
+  {
+    "id": "t05",
+    "question": "What is gradient descent and how does learning rate affect training?",
+    "ground_truth": "Gradient descent iteratively updates model weights by moving in the direction opposite to the gradient of the loss function. Learning rate controls the step size. Too high a learning rate causes oscillation or divergence; too low causes slow convergence or getting stuck in local minima.",
+    "relevant_sources": ["ai_interview_qa_shlok.md", "ml_interview_qa_mjphayes.md"],
+    "notes": "Fundamental optimization concept."
+  },
+  {
+    "id": "t06",
+    "question": "What is retrieval-augmented generation?",
+    "ground_truth": "RAG (Retrieval-Augmented Generation) combines a retrieval system with a language model. At query time, relevant documents are retrieved from a knowledge base and provided as context to the LLM, which generates an answer grounded in the retrieved text. This reduces hallucination and allows the model to access up-to-date or domain-specific knowledge without retraining.",
+    "relevant_sources": ["ai_interview_qa_shlok.md"],
+    "notes": "Core topic of this repo — expect top retrieval scores."
+  },
+  {
+    "id": "t07",
+    "question": "What is regularization and what are L1 and L2 regularization?",
+    "ground_truth": "Regularization adds a penalty term to the loss function to prevent overfitting. L1 (Lasso) adds the sum of absolute values of weights, which promotes sparsity. L2 (Ridge) adds the sum of squared weights, which shrinks all weights but rarely sets them to zero. L1 is preferred when feature selection is desired; L2 when all features are expected to be relevant.",
+    "relevant_sources": ["ai_interview_qa_shlok.md", "ml_interview_qa_kaggle.md"],
+    "notes": "Standard ML concept — tests keyword-style retrieval."
+  },
+  {
+    "id": "t08",
+    "question": "What is cross-validation and why is it used?",
+    "ground_truth": "Cross-validation splits the dataset into k folds, trains on k-1 folds, and validates on the remaining fold, rotating until each fold has been the validation set. It gives a more robust estimate of model performance than a single train/test split, reducing variance from the specific split chosen.",
+    "relevant_sources": ["ml_interview_qa_kaggle.md", "ai_interview_qa_shlok.md"],
+    "notes": "Evaluation technique — broad coverage in corpus."
+  },
+  {
+    "id": "t09",
+    "question": "How does a random forest work?",
+    "ground_truth": "A random forest is an ensemble of decision trees, each trained on a bootstrap sample of the training data (bagging) with a random subset of features considered at each split. Predictions are aggregated by majority vote (classification) or averaging (regression). The randomness reduces correlation between trees and decreases variance.",
+    "relevant_sources": ["ai_interview_qa_shlok.md", "ml_interview_qa_kaggle.md"],
+    "notes": "Ensemble method — tests multi-source retrieval."
+  },
+  {
+    "id": "t10",
+    "question": "What is the bias-variance tradeoff?",
+    "ground_truth": "Bias is the error introduced by approximating a complex problem with a simpler model. Variance is the error from sensitivity to small fluctuations in the training set. High bias leads to underfitting; high variance leads to overfitting. The total error is bias^2 + variance + irreducible noise, and reducing one often increases the other.",
+    "relevant_sources": ["ai_interview_qa_shlok.md", "ml_interview_qa_kaggle.md"],
+    "notes": "Foundational ML tradeoff — high expected retrieval quality."
+  }
+]

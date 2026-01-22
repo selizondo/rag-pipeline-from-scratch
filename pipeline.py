@@ -22,7 +22,13 @@ Usage:
 import argparse
 import time
 
-from config import DEFAULT_DB_PATH, DEFAULT_OLLAMA_MODEL, EMBED_MODEL
+from config import (
+    CORPUS_VERSION,
+    DEFAULT_DB_PATH,
+    DEFAULT_OLLAMA_MODEL,
+    DEFAULT_TOP_K,
+    EMBED_MODEL,
+)
 from generate import generate
 from ingest import ingest
 from retrieve import retrieve
@@ -30,7 +36,7 @@ from retrieve import retrieve
 
 def run(
     query: str,
-    top_k: int = 5,
+    top_k: int = DEFAULT_TOP_K,
     rerank: bool = False,
     model: str = DEFAULT_OLLAMA_MODEL,
     db_path: str = DEFAULT_DB_PATH,
@@ -38,12 +44,16 @@ def run(
     """
     Run the full RAG pipeline and return a result dict with answer + metadata.
 
-    The returned dict includes a retrieval_metadata section so callers can
-    observe which retrieval strategy was used, the top chunk score, and the
-    embedding model version. WHY include this in the response instead of logs:
+    The returned dict includes:
+    - retrieval_metadata: strategy, top_score, embedding_model, corpus_version,
+      reranked, retrieval_latency_ms
+    - fallback_events: list of events (ollama_timeout, bm25_fallback, etc.)
+    - embedding_model, corpus_version: top-level for artifact traceability
+
+    WHY include these in the response instead of logs:
         Logs require a monitoring agent to parse. Response fields let the calling
-        code (eval harness, integration tests) observe pipeline state directly
-        without coupling to log format.
+        code (eval harness, integration tests, api.py) observe pipeline state
+        directly without coupling to log format.
     """
     query = query.strip()
     if not query:
@@ -51,32 +61,44 @@ def run(
 
     t0 = time.time()
 
-    # Retrieve relevant chunks first, optionally applying reranking.
-    chunks = retrieve(query, top_k=top_k, db_path=db_path, rerank=rerank)
+    # Retrieve relevant chunks. retrieve() now returns (chunks, retrieval_info)
+    # with latency, strategy, fallback_events, and corpus_version already computed.
+    chunks, retrieval_info = retrieve(query, top_k=top_k, db_path=db_path, rerank=rerank)
     t_retrieve = time.time()
 
     # Generate the answer using the retrieved context.
-    # generate() returns a plain string — either the answer or "[ERROR: ...]".
-    answer = generate(query, chunks, model=model)
+    # generate() returns (answer, fallback_events) — either the answer or a
+    # best-effort fallback string. Generation fallback_events are merged with
+    # retrieval fallback_events into a single list on the response.
+    answer, gen_fallback_events = generate(query, chunks, model=model)
     t_generate = time.time()
 
-    # Determine which retrieval strategy was actually used (for observability).
-    # "dense_rerank" = bi-encoder + cross-encoder; "dense" = bi-encoder only.
-    retrieval_strategy = "dense_rerank" if rerank else "dense"
+    # Merge fallback events from both retrieval and generation stages.
+    all_fallback_events = retrieval_info.get("fallback_events", []) + gen_fallback_events
 
     return {
         "query": query,
         "answer": answer,
         "chunks_used": len(chunks),
         "sources": list({c["source"] for c in chunks}),
+        # Artifact traceability — lets eval harness and monitoring know exactly
+        # which model and corpus version produced this answer.
+        "embedding_model": EMBED_MODEL,
+        "corpus_version": CORPUS_VERSION,
         # retrieval_metadata lets callers audit how the answer was produced
         # without re-running the pipeline or parsing logs.
         "retrieval_metadata": {
-            "strategy": retrieval_strategy,
-            "top_score": round(chunks[0].get("rerank_score", chunks[0]["score"]), 4) if chunks else 0.0,
-            "embedding_model": EMBED_MODEL,
-            "reranked": rerank,
+            "strategy": retrieval_info["strategy"],
+            "top_score": retrieval_info["top_score"],
+            "embedding_model": retrieval_info["embedding_model"],
+            "corpus_version": retrieval_info["corpus_version"],
+            "reranked": retrieval_info["reranked"],
+            "retrieval_latency_ms": retrieval_info["retrieval_latency_ms"],
         },
+        # fallback_events captures all degradation events across retrieval and
+        # generation stages. Empty list means happy path. Populated list means
+        # something fell back — check the strings for details.
+        "fallback_events": all_fallback_events,
         "latency": {
             "retrieve_ms": round((t_retrieve - t0) * 1000),
             "generate_ms": round((t_generate - t_retrieve) * 1000),
@@ -88,7 +110,7 @@ def run(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="RAG pipeline — question in, answer out")
     parser.add_argument("--query", required=True, help="Question to answer")
-    parser.add_argument("--top-k", type=int, default=5, help="Chunks to retrieve")
+    parser.add_argument("--top-k", type=int, default=DEFAULT_TOP_K, help="Chunks to retrieve")
     parser.add_argument("--rerank", action="store_true", help="Apply cross-encoder reranking")
     parser.add_argument("--model", default=DEFAULT_OLLAMA_MODEL, help="Ollama model to use")
     parser.add_argument("--db-path", default=DEFAULT_DB_PATH, help="Chroma DB path")
@@ -116,7 +138,12 @@ if __name__ == "__main__":
     print(f"A: {result['answer']}\n")
     print(f"Sources: {', '.join(result['sources'])}")
     print(f"Retrieval: strategy={result['retrieval_metadata']['strategy']}  "
-          f"top_score={result['retrieval_metadata']['top_score']}")
+          f"top_score={result['retrieval_metadata']['top_score']}  "
+          f"latency={result['retrieval_metadata']['retrieval_latency_ms']}ms")
+    print(f"Artifact: embedding_model={result['embedding_model']}  "
+          f"corpus_version={result['corpus_version']}")
+    if result["fallback_events"]:
+        print(f"Fallback events: {result['fallback_events']}")
     print(f"Latency: retrieve={result['latency']['retrieve_ms']}ms  "
           f"generate={result['latency']['generate_ms']}ms  "
           f"total={result['latency']['total_ms']}ms")
