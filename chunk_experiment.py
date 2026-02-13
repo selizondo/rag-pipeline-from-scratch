@@ -14,7 +14,10 @@ sys.path.insert(0, os.path.dirname(__file__))
 from ingest import ingest
 from retrieve import retrieve
 
-CORPUS = "/Users/selizondo/Dropbox/projects/vscode/ml/ai_ml_study_notes/chats"
+CORPUS = os.environ.get(
+    "CORPUS_PATH",
+    os.path.join(os.path.dirname(__file__), "data"),
+)
 QUERIES = [
     "What is feature engineering and why does it matter?",
     "What are the most important feature transformation techniques?",
