@@ -70,6 +70,7 @@ RETRIEVAL_LATENCY_SLA_MS: int = _cfg["retrieval"]["latency_sla_ms"]
 # ---------------------------------------------------------------------------
 
 DEFAULT_OLLAMA_MODEL: str = _cfg["generation"]["model"]
+OLLAMA_URL: str = _cfg["generation"]["ollama_url"]
 MAX_CONTEXT_WORDS: int = _cfg["generation"]["context_budget_words"]
 OLLAMA_TIMEOUT_SECONDS: int = _cfg["generation"]["timeout_seconds"]
 

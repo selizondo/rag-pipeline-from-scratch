@@ -36,12 +36,10 @@ import logging
 
 import requests
 
-from config import CORPUS_VERSION, DEFAULT_DB_PATH, DEFAULT_OLLAMA_MODEL, MAX_CONTEXT_WORDS, OLLAMA_TIMEOUT_SECONDS
+from config import CORPUS_VERSION, DEFAULT_DB_PATH, DEFAULT_OLLAMA_MODEL, MAX_CONTEXT_WORDS, OLLAMA_TIMEOUT_SECONDS, OLLAMA_URL
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
-
-OLLAMA_URL = "http://localhost:11434/api/generate"
 
 
 def build_prompt(query: str, chunks: list[dict]) -> str:

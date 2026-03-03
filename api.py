@@ -137,6 +137,7 @@ async def query(req: QueryRequest) -> QueryResponse:
             query=req.query,
             top_k=req.top_k,
             rerank=req.rerank,
+            strategy=req.strategy,
         )
     except RuntimeError as e:
         # Collection not found — ingest.py hasn't been run yet.

@@ -47,6 +47,10 @@ generation:
   # Ollama model for answer generation.
   model: "llama3.2"
 
+  # Ollama inference endpoint. Override if running Ollama on a remote host or
+  # non-default port. Set OLLAMA_URL env var as an alternative to editing here.
+  ollama_url: "http://localhost:11434/api/generate"
+
   # Conservative context word budget.
   # llama3.2 has an 8192-token window; prompt overhead ~200 tokens;
   # English averages ~1.3 tokens/word → max ~6147 words.

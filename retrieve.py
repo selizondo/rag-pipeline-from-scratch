@@ -64,6 +64,27 @@ from config import (
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 
+# Module-level singletons — loaded once at import time, reused for every request.
+# WHY: SentenceTransformer and CrossEncoder each take 2–5s to load from disk.
+# Loading inside retrieve() adds that overhead to every API call. These are
+# thread-safe for inference (no mutable state after __init__).
+_embed_model: SentenceTransformer | None = None
+_cross_encoder: CrossEncoder | None = None
+
+
+def _get_embed_model() -> SentenceTransformer:
+    global _embed_model
+    if _embed_model is None:
+        _embed_model = SentenceTransformer(EMBED_MODEL)
+    return _embed_model
+
+
+def _get_cross_encoder() -> CrossEncoder:
+    global _cross_encoder
+    if _cross_encoder is None:
+        _cross_encoder = CrossEncoder(RERANK_MODEL)
+    return _cross_encoder
+
 
 def validate_collection(db_path: str = DEFAULT_DB_PATH) -> bool:
     """
@@ -175,6 +196,7 @@ def retrieve(
     top_k: int = DEFAULT_TOP_K,
     db_path: str = DEFAULT_DB_PATH,
     rerank: bool = False,
+    strategy: str = "auto",
 ) -> tuple[list[dict], dict]:
     """
     Retrieve the most relevant text chunks for a query.
@@ -192,14 +214,19 @@ def retrieve(
         retrieval_latency_ms: int
         fallback_events: list[str]
 
+    strategy controls retrieval behavior:
+        "auto" — dense with automatic BM25 fallback when top_score < BM25_FALLBACK_THRESHOLD
+        "bm25" — force BM25 keyword retrieval regardless of dense score
+        "dense" — force dense-only; no BM25 fallback even if score is low
+
     Returns ([], retrieval_info) if the collection is empty.
     Raises RuntimeError if the collection doesn't exist (run ingest.py first).
     """
     t0 = time.time()
     fallback_events: list[str] = []
 
-    # Load the same embedding model used during ingest — vector spaces must match.
-    embed_model = SentenceTransformer(EMBED_MODEL)
+    # Reuse module-level singleton — loading SentenceTransformer takes 2-5s per call.
+    embed_model = _get_embed_model()
     client = chromadb.PersistentClient(path=db_path)
 
     try:
@@ -225,9 +252,10 @@ def retrieve(
     if count == 0:
         elapsed_ms = round((time.time() - t0) * 1000)
         return [], {
-            "strategy": "dense",
+            "strategy": strategy,
             "top_score": 0.0,
             "embedding_model": EMBED_MODEL,
+            "corpus_version": CORPUS_VERSION,
             "reranked": False,
             "retrieval_latency_ms": elapsed_ms,
             "fallback_events": [],
@@ -262,32 +290,40 @@ def retrieve(
             "retrieval_method": "dense",
         })
 
-    # BM25 fallback: if the top dense score is below threshold, switch retrieval.
-    # WHY: dense retrieval underperforms on exact-keyword queries (specific acronyms,
-    # API names, precise technical terms). BM25 handles these better. The threshold
-    # is tunable via config.yaml → retrieval.bm25_fallback_threshold.
+    # Determine effective retrieval strategy.
+    # "bm25" forces BM25 regardless of dense score.
+    # "dense" forces dense-only — no automatic fallback.
+    # "auto" falls back to BM25 when top dense score < threshold.
     top_dense_score = chunks[0]["score"] if chunks else 0.0
-    if top_dense_score < BM25_FALLBACK_THRESHOLD:
-        logger.info(
-            "Dense score %.3f < threshold %.3f — switching to BM25 fallback",
-            top_dense_score, BM25_FALLBACK_THRESHOLD,
-        )
-        fallback_events.append("bm25_fallback_triggered")
+    effective_strategy: str
+
+    if strategy == "bm25":
         bm25_chunks = retrieve_bm25(query, top_k, db_path)
         if bm25_chunks:
             chunks = bm25_chunks
-            strategy = "bm25_fallback"
+        effective_strategy = "bm25_fallback"
+    elif strategy == "dense":
+        effective_strategy = "dense"
+    else:  # "auto"
+        if top_dense_score < BM25_FALLBACK_THRESHOLD:
+            logger.info(
+                "Dense score %.3f < threshold %.3f — switching to BM25 fallback",
+                top_dense_score, BM25_FALLBACK_THRESHOLD,
+            )
+            fallback_events.append("bm25_fallback_triggered")
+            bm25_chunks = retrieve_bm25(query, top_k, db_path)
+            if bm25_chunks:
+                chunks = bm25_chunks
+            effective_strategy = "bm25_fallback"
         else:
-            strategy = "dense"  # BM25 also returned nothing; keep dense results
-    else:
-        strategy = "dense"
+            effective_strategy = "dense"
 
-    if rerank and chunks and strategy != "bm25_fallback":
+    if rerank and chunks and effective_strategy != "bm25_fallback":
         # Cross-encoder scores (query, document) pairs jointly.
         # WHY cross-encoder for reranking: it attends to both texts simultaneously,
         # catching relevance signals that bi-encoder embedding similarity misses
         # (e.g., a chunk that uses different vocabulary but answers the question).
-        reranker = CrossEncoder(RERANK_MODEL)
+        reranker = _get_cross_encoder()
         pairs = [(query, c["text"]) for c in chunks]
         rerank_scores = reranker.predict(pairs)
         for chunk, score in zip(chunks, rerank_scores):
@@ -295,7 +331,7 @@ def retrieve(
 
         # Sort by cross-encoder score descending — highest relevance first.
         chunks = sorted(chunks, key=lambda x: x["rerank_score"], reverse=True)
-        strategy = "dense_rerank"
+        effective_strategy = "dense_rerank"
 
     chunks = chunks[:top_k]
 
@@ -314,11 +350,11 @@ def retrieve(
         top_score = chunks[0].get("rerank_score", chunks[0]["score"])
 
     retrieval_info = {
-        "strategy": strategy,
+        "strategy": effective_strategy,
         "top_score": round(top_score, 4),
         "embedding_model": EMBED_MODEL,
         "corpus_version": CORPUS_VERSION,
-        "reranked": rerank and strategy == "dense_rerank",
+        "reranked": rerank and effective_strategy == "dense_rerank",
         "retrieval_latency_ms": elapsed_ms,
         "fallback_events": fallback_events,
     }
