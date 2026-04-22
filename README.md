@@ -204,3 +204,11 @@ python chunk_experiment.py
 - No persistence of query history or caching
 - `seed_corpus.py` pulls full Q&A text but doesn't filter by topic cluster — a larger seeded corpus would benefit from category-based file splitting
 
+---
+
+## Architectural Standard
+
+The 72% Accuracy@4 baseline is not the deliverable — the measurement discipline is. You can't improve what you can't measure, and this repo establishes the reference point: vector-only retrieval, chunk=256, no BM25, no reranking, no framework. Every improvement claim in downstream projects ([rag-pipeline-app](../rag-pipeline-app): +4pp with hybrid search, [rag-ragas-eval](../rag-ragas-eval): +75% faithfulness with BM25) has this number to beat.
+
+The chunk size experiment methodology transfers directly to any new corpus: define the metric, vary one parameter, hold everything else constant, measure. That's what makes retrieval improvements defensible. Any team starting a RAG project can run `python chunk_experiment.py` on their own data and answer the chunk size question with evidence rather than convention.
+
