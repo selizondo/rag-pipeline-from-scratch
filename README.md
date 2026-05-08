@@ -61,7 +61,7 @@ This repo is intentionally minimal and is not meant to be production-ready. It l
 
 ```bash
 # 1. One-time: copy and fill the workspace master env
-cp ../career/.env.example ../career/.env   # add keys if needed (not required for this project)
+cp .env.example .env   # add keys if needed (not required for this project)
 
 # 2. Activate shared venv
 source ~/.venvs/newline/bin/activate

@@ -161,5 +161,5 @@ Max word budget:            ~6147 words
 
 **Baseline comparisons**:
 - BM25 alone: implemented in `retrieve_bm25()` and included in `make eval`
-- Random chunking: not implemented (diminishing portfolio value)
+- Random chunking: not implemented (diminishing returns over fixed-size baseline)
 - Popularity-only: not applicable to this corpus (no popularity signal)
