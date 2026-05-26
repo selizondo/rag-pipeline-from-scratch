@@ -176,7 +176,7 @@ Tested 256 / 512 / 1024 word chunk sizes across 3 queries:
 
 **Finding:** Smaller chunks (256 words) produce more topically focused embeddings, leading to higher retrieval precision. At 1024 words, entire documents collapse into single vectors that dilute query relevance. **Default: 256 words with ~12% overlap.**
 
-**Answer quality:** Evaluated on 20 held-out questions using the [llm-eval-harness](../llm-eval-harness) judge — 72% Accuracy@4 with chunk=256, vector search only. This is the baseline that `rag-pipeline-app` improves on: adding hybrid BM25+vector search raises it to 83% (see [rag-pipeline-app Decision 1](../rag-pipeline-app/README.md#decision-1-hybrid-bm25--vector-search)).
+**Answer quality:** Evaluated on 20 held-out questions using the [llm-eval-harness](https://github.com/selizondo/llm-eval-harness) judge — 72% Accuracy@4 with chunk=256, vector search only. This is the baseline that `rag-pipeline-app` improves on: adding hybrid BM25+vector search raises it to 83% (see [rag-pipeline-app Decision 1](https://github.com/selizondo/rag-pipeline-app#decision-1-hybrid-bm25--vector-search)).
 
 Run the experiment yourself against the seeded corpus:
 
@@ -192,7 +192,7 @@ python chunk_experiment.py
 
 **Chroma file-backed storage:** The default Chroma setup writes to a local directory. It has no concurrency guarantees — two simultaneous writes corrupt the index. For multi-user or multi-process access, switch to Chroma's HTTP server mode.
 
-**No observability:** There's no record of which chunks were retrieved for any given query or how long retrieval took. You can't tell whether a wrong answer is a retrieval failure or a generation failure. `rag-pipeline-app` adds SQLite logging for this — see [its observability section](../rag-pipeline-app/README.md#decision-3-observability-from-day-one).
+**No observability:** There's no record of which chunks were retrieved for any given query or how long retrieval took. You can't tell whether a wrong answer is a retrieval failure or a generation failure. `rag-pipeline-app` adds SQLite logging for this — see [its observability section](https://github.com/selizondo/rag-pipeline-app#decision-3-observability-from-day-one).
 
 ---
 
@@ -208,7 +208,7 @@ python chunk_experiment.py
 
 ## Architectural Standard
 
-The 72% Accuracy@4 baseline is not the deliverable — the measurement discipline is. You can't improve what you can't measure, and this repo establishes the reference point: vector-only retrieval, chunk=256, no BM25, no reranking, no framework. Every improvement claim in downstream projects ([rag-pipeline-app](../rag-pipeline-app): +4pp with hybrid search, [rag-ragas-eval](../rag-ragas-eval): +75% faithfulness with BM25) has this number to beat.
+The 72% Accuracy@4 baseline is not the deliverable — the measurement discipline is. You can't improve what you can't measure, and this repo establishes the reference point: vector-only retrieval, chunk=256, no BM25, no reranking, no framework. Every improvement claim in downstream projects ([rag-pipeline-app](https://github.com/selizondo/rag-pipeline-app): +4pp with hybrid search, [rag-ragas-eval](https://github.com/selizondo/rag-ragas-eval): +75% faithfulness with BM25) has this number to beat.
 
 The chunk size experiment methodology transfers directly to any new corpus: define the metric, vary one parameter, hold everything else constant, measure. That's what makes retrieval improvements defensible. Any team starting a RAG project can run `python chunk_experiment.py` on their own data and answer the chunk size question with evidence rather than convention.
 
