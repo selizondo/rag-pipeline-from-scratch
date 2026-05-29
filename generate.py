@@ -30,13 +30,19 @@ Usage:
     python generate.py --query "What is attention?" --top-k 5
 """
 
-import asyncio
 import argparse
+import asyncio
 import logging
 
 import requests
 
-from config import CORPUS_VERSION, DEFAULT_DB_PATH, DEFAULT_OLLAMA_MODEL, MAX_CONTEXT_WORDS, OLLAMA_TIMEOUT_SECONDS, OLLAMA_URL
+from config import (
+    DEFAULT_DB_PATH,
+    DEFAULT_OLLAMA_MODEL,
+    MAX_CONTEXT_WORDS,
+    OLLAMA_TIMEOUT_SECONDS,
+    OLLAMA_URL,
+)
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")

@@ -35,7 +35,6 @@ Run it after any corpus update to detect retrieval regressions.
 
 import argparse
 import json
-import os
 import sys
 import time
 from datetime import datetime, timezone

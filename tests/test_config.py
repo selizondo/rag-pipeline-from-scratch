@@ -7,8 +7,9 @@ Coverage:
   - Retrieval filter contract: version-scoped WHERE predicate is non-null
 """
 
-import sys
 import os
+import sys
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 
@@ -47,6 +48,7 @@ class TestVersionScopedFilterContract:
     def test_corpus_version_is_valid_identifier(self):
         """Version tags used in metadata filters must be safe for string comparison."""
         import re
+
         from config import CORPUS_VERSION
         assert re.match(r'^[a-zA-Z0-9._\-]+$', CORPUS_VERSION), (
             f"CORPUS_VERSION={CORPUS_VERSION!r} contains characters unsafe for SQL predicates"

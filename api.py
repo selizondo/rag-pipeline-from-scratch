@@ -30,7 +30,6 @@ from config import (
 from generate import generate_async
 from retrieve import retrieve, validate_collection
 
-
 # ---------------------------------------------------------------------------
 # Request / Response schemas
 # ---------------------------------------------------------------------------

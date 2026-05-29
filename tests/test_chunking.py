@@ -12,8 +12,8 @@ Coverage:
 
 def _chunk_text(text: str, chunk_size: int, overlap: int) -> list[str]:
     """Import the production chunker — same logic used by ingest.py."""
-    import sys
     import os
+    import sys
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
     from ingest import chunk_text
     return chunk_text(text, chunk_size, overlap)
