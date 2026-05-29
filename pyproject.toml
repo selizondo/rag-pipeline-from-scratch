@@ -1,0 +1,40 @@
+[project]
+name = "rag-pipeline-from-scratch"
+version = "0.1.0"
+description = "Baseline RAG pipeline — dense retrieval, BM25, and reranking without frameworks"
+requires-python = ">=3.12"
+dependencies = [
+    "chromadb==0.6.3",
+    "sentence-transformers==3.4.1",
+    "requests>=2.32",
+    "pyyaml>=6.0",
+    "pydantic>=2.0",
+    "rank-bm25>=0.2.2",
+    "fastapi>=0.111",
+    "uvicorn[standard]>=0.29",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "pytest-asyncio>=0.25",
+    "ruff>=0.9",
+]
+
+[tool.uv]
+constraint-dependencies = [
+    "torch<2.3 ; sys_platform == 'darwin' and platform_machine == 'x86_64'",
+    "transformers<5 ; sys_platform == 'darwin' and platform_machine == 'x86_64'",
+    "sentence-transformers<4 ; sys_platform == 'darwin' and platform_machine == 'x86_64'",
+    "onnxruntime<1.20 ; sys_platform == 'darwin' and platform_machine == 'x86_64'",
+]
+
+[tool.ruff]
+line-height = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
