@@ -1,5 +1,7 @@
 # RAG Pipeline From Scratch
 
+![Tests](https://github.com/selizondo/rag-pipeline-from-scratch/actions/workflows/test.yml/badge.svg)
+
 A minimal, framework-free Retrieval-Augmented Generation pipeline built to understand every layer — chunking, embedding, vector search, reranking, and generation — without abstractions hiding the mechanics.
 
 **Stack:** Python · Chroma · sentence-transformers · Ollama · cross-encoder reranking
