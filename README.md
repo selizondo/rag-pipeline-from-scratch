@@ -143,6 +143,8 @@ struggle to capture.
 
 Sources: ml_interview_qa_kaggle.md, ai_interview_qa_shlok.md
 Latency: retrieve=2936ms  generate=96082ms  total=99018ms
+  ↳ retrieve: embedding query + Chroma vector search (all-MiniLM-L6-v2 embedding + cosine distance)
+  ↳ generate: token-by-token generation via Ollama (llama3.2, local inference on CPU)
 ```
 
 ---
