@@ -8,6 +8,16 @@ This project builds that baseline. A zero-dependency RAG pipeline where every de
 
 **Stack:** Python · ChromaDB · sentence-transformers · Ollama · rank-bm25
 
+## Related Projects
+
+1. [rag-pipeline-app](https://github.com/selizondo/rag-pipeline-app) — improved baseline with hybrid search
+2. [llm-eval-harness](https://github.com/selizondo/llm-eval-harness) — eval harness used for 72% measurement
+3. [rag-ragas-eval](https://github.com/selizondo/rag-ragas-eval) — alternative RAGAS evaluation of the same retrieval pipeline
+
+*Companion post: [Don't Guess. Measure.](docs/blog_post.md) — why chunk size matters, why measurement beats convention*
+
+---
+
 ## Results
 
 Chunk size is the single highest-leverage parameter in a RAG pipeline. Tested across 256, 512, and 1024 words on 20 held-out questions:
@@ -38,10 +48,6 @@ Known gap: `all-MiniLM-L6-v2` has a 256 WordPiece token limit. One word is rough
 
 The prompt instructs the LLM: "Answer using ONLY the context provided. If the context is insufficient, say so." Wrong answers become "I don't know" instead of confident fabrications. The model cannot invent facts if it is forced to cite retrieved context.
 
-**Companion post:** "Don't Guess. Measure." (AI Systems in Production series, coming soon)
-**Related projects:** [rag-pipeline-app](https://github.com/selizondo/rag-pipeline-app) (improved baseline, hybrid search) · [llm-eval-harness](https://github.com/selizondo/llm-eval-harness) (eval harness used for 72% measurement)
-
----
 
 ## Go Deeper
 

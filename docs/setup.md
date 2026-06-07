@@ -1,5 +1,19 @@
 # Setup and Usage
 
+## Key Concepts
+
+**Chunking:** Splitting documents into overlapping segments (256 words default, 32-word overlap). Overlap ensures concepts split across chunk boundaries don't lose context. The tradeoff: smaller chunks = better retrieval precision but more chunks to embed; larger chunks = fewer embeddings but diluted signal. This project measures the tradeoff (chunk size 128/256/512) before choosing the default.
+
+**Embedding:** Converting text to dense vectors (384-dim with `all-MiniLM-L6-v2`). Embeddings capture semantic meaning — "transformer architecture" and "attention mechanism" are close in embedding space. Stored in Chroma, indexed for fast similarity search. Key insight: embeddings compress meaning but lose exact keyword matching — solved by reranking.
+
+**Vector similarity search:** Finding chunks closest to the query in embedding space (Chroma uses HNSW indexing + cosine distance). Fast but biased toward semantic similarity. Fails on exact keyword queries: "What is LoRA?" — the embedding doesn't match "low-rank adaptation" well enough to surface the definition. Fallback: cross-encoder reranking.
+
+**Cross-encoder reranking:** A 2-stage retrieval. Stage 1: retrieve top-100 chunks via vector similarity (fast, broad). Stage 2: re-score the top-100 using a cross-encoder model that sees the full (query, chunk) pair (slower, precise). Reranking adds ~3x latency but surfaces the right chunks for keyword queries. Optional — use `--rerank` if quality matters more than speed.
+
+**Grounding and hallucination prevention:** Building a prompt with retrieved chunks as context, then asking the LLM to answer using only that context. Reduces hallucinations — the model can't confidently invent facts if it's forced to cite retrieved context. This project explicitly instructs the LLM: "Answer using ONLY the context provided. If the context is insufficient, say so."
+
+---
+
 ## Prerequisites
 
 - Python 3.10+
